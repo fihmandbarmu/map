@@ -49,6 +49,21 @@ document.addEventListener('DOMContentLoaded', () => {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   }
 
+  // Get Current Location Helper (Promise-based)
+  function GetCurrentPosition() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Geolocation not supported"));
+      } else {
+        navigator.geolocation.getCurrentPosition(
+          pos => resolve([pos.coords.latitude, pos.coords.longitude]),
+          err => reject(err),
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      }
+    });
+  }
+
   // UI Tabs
   document.getElementById('tab-search').addEventListener('click', () => switchTab('search'));
   document.getElementById('tab-directions').addEventListener('click', () => switchTab('directions'));
@@ -92,12 +107,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Geocoding Search Helper
   async function geocode(query) {
-    if (!query) return null;
+    if (!query || !query.trim()) return null;
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
       const data = await res.json();
       if (data && data.length > 0) {
-        return data;
+        return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
       }
     } catch (e) {
       console.error(e);
@@ -116,66 +131,96 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const results = await geocode(query);
-    if (results) {
-      dropdown.innerHTML = '';
-      results.slice(0, 5).forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'result-item';
-        div.textContent = item.display_name;
-        div.addEventListener('click', () => {
-          map.setView([item.lat, item.lon], 15);
-          L.marker([item.lat, item.lon]).addTo(map).bindPopup(item.display_name).openPopup();
-          dropdown.classList.remove('active');
-          searchInput.value = item.display_name.split(',')[0];
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+      const results = await res.json();
+      if (results && results.length > 0) {
+        dropdown.innerHTML = '';
+        results.slice(0, 5).forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'result-item';
+          div.textContent = item.display_name;
+          div.addEventListener('click', () => {
+            const lat = parseFloat(item.lat);
+            const lon = parseFloat(item.lon);
+            map.setView([lat, lon], 15);
+            L.marker([lat, lon]).addTo(map).bindPopup(item.display_name).openPopup();
+            dropdown.classList.remove('active');
+            searchInput.value = item.display_name.split(',')[0];
+          });
+          dropdown.appendChild(div);
         });
-        dropdown.appendChild(div);
-      });
-      dropdown.classList.add('active');
+        dropdown.classList.add('active');
+      }
+    } catch (err) {
+      console.error(err);
     }
   });
 
-  // Navigation Execution
+  // --- START NAVIGATION BUTTON FIX ---
   document.getElementById('route-btn').addEventListener('click', async () => {
-    const startInput = document.getElementById('start-input').value;
-    const endInput = document.getElementById('end-input').value;
+    const startInput = document.getElementById('start-input').value.trim();
+    const endInput = document.getElementById('end-input').value.trim();
 
-    statusMsg.textContent = "Locating endpoints...";
-
-    const startData = await geocode(startInput);
-    const endData = await geocode(endInput);
-
-    if (!endData) {
-      statusMsg.textContent = "Destination point not found.";
+    if (!endInput) {
+      statusMsg.textContent = "Please type a destination address.";
       return;
     }
 
-    const end = { lat: parseFloat(endData[0].lat), lon: parseFloat(endData[0].lon) };
+    statusMsg.textContent = "Calculating route...";
 
-    if (navigator.geolocation) {
-      if (watchId) navigator.geolocation.clearWatch(watchId);
+    try {
+      // 1. Resolve Destination Coordinates
+      const endCoords = await geocode(endInput);
+      if (!endCoords) {
+        statusMsg.textContent = "Destination address not found.";
+        return;
+      }
 
-      watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          const lat = startData ? parseFloat(startData[0].lat) : pos.coords.latitude;
-          const lon = startData ? parseFloat(startData[0].lon) : pos.coords.longitude;
+      // 2. Resolve Start Coordinates (Use GPS if start box is empty)
+      let startCoords = null;
+      if (startInput) {
+        startCoords = await geocode(startInput);
+        if (!startCoords) {
+          statusMsg.textContent = "Starting address not found.";
+          return;
+        }
+      } else {
+        statusMsg.textContent = "Acquiring GPS location...";
+        try {
+          startCoords = await GetCurrentPosition();
+        } catch (err) {
+          statusMsg.textContent = "GPS location unavailable. Please enter a start location manually.";
+          return;
+        }
+      }
 
-          updateCarMarker(lat, lon);
+      // 3. Render Route instantly
+      calculateRoute(startCoords, endCoords);
+      updateCarMarker(startCoords[0], startCoords[1]);
 
-          if (!routingControl) {
-            calculateRoute([lat, lon], [end.lat, end.lon]);
-          } else {
-            checkTurnAlerts(lat, lon);
-          }
-        },
-        () => { statusMsg.textContent = "GPS Access Denied."; },
-        { enableHighAccuracy: true }
-      );
+      // 4. Start Live GPS Tracking
+      if (navigator.geolocation) {
+        if (watchId) navigator.geolocation.clearWatch(watchId);
+        watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            const currentLat = pos.coords.latitude;
+            const currentLon = pos.coords.longitude;
+            updateCarMarker(currentLat, currentLon);
+            checkTurnAlerts(currentLat, currentLon);
+          },
+          (err) => console.warn("GPS tracking warning:", err.message),
+          { enableHighAccuracy: true }
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      statusMsg.textContent = "Failed to start navigation. Please try again.";
     }
   });
 
   function updateCarMarker(lat, lon) {
-    map.setView([lat, lon], 17);
+    map.setView([lat, lon], 16);
 
     if (!userMarker) {
       const carIcon = L.divIcon({
@@ -196,7 +241,8 @@ document.addEventListener('DOMContentLoaded', () => {
       waypoints: [L.latLng(start[0], start[1]), L.latLng(end[0], end[1])],
       router: L.Routing.osrmv1({ profile: selectedMode }),
       lineOptions: { styles: [{ color: '#1a73e8', weight: 6 }] },
-      show: false
+      show: false,
+      addWaypoints: false
     }).addTo(map);
 
     routingControl.on('routesfound', (e) => {
@@ -211,6 +257,10 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('nav-banner').classList.add('active');
       statusMsg.textContent = "Route Active.";
       speak("Starting navigation.");
+    });
+
+    routingControl.on('routingerror', () => {
+      statusMsg.textContent = "Could not find a route between these locations.";
     });
   }
 
@@ -234,7 +284,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('clear-route-btn').addEventListener('click', () => {
     if (routingControl) map.removeControl(routingControl);
     if (watchId) navigator.geolocation.clearWatch(watchId);
+    if (userMarker) map.removeLayer(userMarker);
+    
     routingControl = null;
+    userMarker = null;
     document.getElementById('nav-banner').classList.remove('active');
     statusMsg.textContent = "Route Cleared.";
   });
