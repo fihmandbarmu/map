@@ -1,61 +1,63 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // Tile Layer Configurations
+  const mapElement = document.getElementById('map');
+  
   const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
+    attribution: '&copy; OpenStreetMap'
   });
 
-  const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 18,
-    attribution: 'Tiles &copy; Esri'
-  });
-
-  // Initialize Map
   const map = L.map('map', {
-    center: [51.505, -0.09], // Default London
-    zoom: 13,
+    center: [51.505, -0.09],
+    zoom: 16,
     layers: [streetLayer]
   });
 
   let routingControl = null;
-  let activeMarkers = [];
+  let watchId = null;
+  let userMarker = null;
+  let routeSteps = [];
+  let currentStepIndex = 0;
   let selectedMode = 'car';
+  let isNavigating = false;
 
-  const statusMsg = document.getElementById('status-message');
+  // Web Speech API for voice instructions
+  const synth = window.speechSynthesis;
 
-  // --- Tab Switcher Logic ---
-  document.getElementById('tab-search').addEventListener('click', () => switchTab('search'));
-  document.getElementById('tab-directions').addEventListener('click', () => switchTab('directions'));
-
-  function switchTab(tab) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-
-    if (tab === 'search') {
-      document.getElementById('tab-search').classList.add('active');
-      document.getElementById('panel-search').classList.add('active');
-    } else {
-      document.getElementById('tab-directions').classList.add('active');
-      document.getElementById('panel-directions').classList.add('active');
+  function speakAlert(text) {
+    if ('speechSynthesis' in window) {
+      synth.cancel(); // Interrupt previous alert
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      synth.speak(utterance);
     }
   }
 
-  // --- Map Layer Switcher ---
-  document.getElementById('btn-streets').addEventListener('click', function() {
-    map.removeLayer(satelliteLayer);
-    map.addLayer(streetLayer);
-    this.classList.add('active');
-    document.getElementById('btn-satellite').classList.remove('active');
-  });
+  // --- Calculate Distance Between Coordinates (Haversine Formula) ---
+  function getDistanceMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371e3;
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
 
-  document.getElementById('btn-satellite').addEventListener('click', function() {
-    map.removeLayer(streetLayer);
-    map.addLayer(satelliteLayer);
-    this.classList.add('active');
-    document.getElementById('btn-streets').classList.remove('active');
-  });
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-  // --- Travel Mode Switcher ---
+    return R * c;
+  }
+
+  // --- Calculate Bearing/Heading Direction ---
+  function getBearing(lat1, lon1, lat2, lon2) {
+    const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) -
+              Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+    const brng = Math.atan2(y, x) * 180 / Math.PI;
+    return (brng + 360) % 360;
+  }
+
+  // --- Mode Selection ---
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
@@ -64,124 +66,101 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // --- Geocoding Function (Nominatim API) ---
-  async function geocode(query) {
-    if (!query) return null;
-    try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
-      const data = await response.json();
-      if (data && data.length > 0) {
-        return {
-          lat: parseFloat(data[0].lat),
-          lon: parseFloat(data[0].lon),
-          name: data[0].display_name
-        };
-      }
-    } catch (err) {
-      console.error("Geocoding failed:", err);
-    }
-    return null;
-  }
-
-  // --- Single Location Search ---
-  async function performSearch() {
-    const input = document.getElementById('search-input').value;
-    statusMsg.textContent = "Searching...";
-    
-    const result = await geocode(input);
-    if (result) {
-      map.setView([result.lat, result.lon], 14);
-      addMarker(result.lat, result.lon, result.name);
-      statusMsg.textContent = `Found: ${result.name.split(',')[0]}`;
-    } else {
-      statusMsg.textContent = "Location not found. Try another query.";
-    }
-  }
-
-  document.getElementById('search-btn').addEventListener('click', performSearch);
-  document.getElementById('search-input').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') performSearch();
-  });
-
-  // --- Directions & Routing Engine ---
-  document.getElementById('route-btn').addEventListener('click', async () => {
-    const startVal = document.getElementById('start-input').value;
-    const endVal = document.getElementById('end-input').value;
-
-    statusMsg.textContent = "Calculating route...";
-
-    const startLoc = await geocode(startVal);
-    const endLoc = await geocode(endVal);
-
-    if (!startLoc || !endLoc) {
-      statusMsg.textContent = "Could not resolve one or both locations.";
+  // --- Start Turn-by-Turn Navigation ---
+  async function startNavigation(destinationQuery) {
+    if (!navigator.geolocation) {
+      alert("Geolocation required for active car navigation.");
       return;
     }
 
-    if (routingControl) {
-      map.removeControl(routingControl);
+    // Resolve Destination
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destinationQuery)}`);
+    const data = await res.json();
+    if (!data.length) {
+      alert("Destination not found.");
+      return;
+    }
+    const dest = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+
+    // Begin Live GPS Tracking
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => handlePositionUpdate(pos, dest),
+      (err) => console.error(err),
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
+    );
+  }
+
+  function handlePositionUpdate(position, dest) {
+    const { latitude: lat, longitude: lon, heading } = position.coords;
+
+    // Initialize or Move Car Marker
+    if (!userMarker) {
+      const carIcon = L.divIcon({ className: 'user-car-marker' });
+      userMarker = L.marker([lat, lon], { icon: carIcon }).addTo(map);
+      
+      // Calculate initial route once position is established
+      buildRoute([lat, lon], dest);
+    } else {
+      userMarker.setLatLng([lat, lon]);
     }
 
-    // Set up routing
+    map.setView([lat, lon], 17);
+
+    // --- CAR MODE: Rotate Camera in Direction of Movement ---
+    if (selectedMode === 'car') {
+      const moveHeading = heading !== null && !isNaN(heading) ? heading : 0;
+      mapElement.style.transform = `rotate(-${moveHeading}deg)`;
+    } else {
+      mapElement.style.transform = `rotate(0deg)`;
+    }
+
+    // --- Check Proximity & Trigger Maneuver Alerts ---
+    if (routeSteps.length > 0 && currentStepIndex < routeSteps.length) {
+      const step = routeSteps[currentStepIndex];
+      const distToNextStep = getDistanceMeters(lat, lon, step.latLng.lat, step.latLng.lng);
+
+      // Update Nav HUD
+      document.getElementById('nav-banner').classList.add('active');
+      document.getElementById('nav-instruction').textContent = step.instruction;
+      document.getElementById('nav-distance').textContent = `In ${Math.round(distToNextStep)} meters`;
+
+      // Trigger Voice Alert within 50 meters of turn
+      if (distToNextStep < 50 && !step.alerted) {
+        speakAlert(`In 50 meters, ${step.instruction}`);
+        step.alerted = true;
+        currentStepIndex++;
+      }
+    }
+  }
+
+  function buildRoute(start, end) {
+    if (routingControl) map.removeControl(routingControl);
+
     routingControl = L.Routing.control({
-      waypoints: [
-        L.latLng(startLoc.lat, startLoc.lon),
-        L.latLng(endLoc.lat, endLoc.lon)
-      ],
-      router: L.Routing.osrmv1({
-        serviceUrl: 'https://router.project-osrm.org/route/v1',
-        profile: selectedMode
-      }),
-      lineOptions: {
-        styles: [{ color: '#4285F4', weight: 6, opacity: 0.8 }]
-      },
-      show: true,
-      addWaypoints: false
+      waypoints: [L.latLng(start[0], start[1]), L.latLng(end[0], end[1])],
+      router: L.Routing.osrmv1({ profile: selectedMode }),
+      lineOptions: { styles: [{ color: '#4285F4', weight: 6 }] },
+      show: false
     }).addTo(map);
 
-    statusMsg.textContent = "Route loaded successfully.";
-  });
+    // Extract step instructions from route for the Alert Engine
+    routingControl.on('routesfound', (e) => {
+      const instructions = e.routes[0].instructions;
+      const coordinates = e.routes[0].coordinates;
 
-  document.getElementById('clear-route-btn').addEventListener('click', () => {
-    if (routingControl) {
-      map.removeControl(routingControl);
-      routingControl = null;
-      statusMsg.textContent = "Route cleared.";
-    }
-  });
-
-  // --- Click to Drop Custom Pin ---
-  map.on('click', (e) => {
-    const { lat, lng } = e.latlng;
-    addMarker(lat, lng, `Dropped Pin (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
-    statusMsg.textContent = "Pin added to map.";
-  });
-
-  function addMarker(lat, lng, title) {
-    const marker = L.marker([lat, lng]).addTo(map);
-    marker.bindPopup(`<b>${title}</b>`).openPopup();
-    activeMarkers.push(marker);
+      routeSteps = instructions.map(i => ({
+        instruction: i.text,
+        latLng: coordinates[i.index],
+        alerted: false
+      }));
+      
+      currentStepIndex = 0;
+      speakAlert("Starting navigation.");
+    });
   }
 
-  // --- Geolocation ---
-  document.getElementById('btn-location').addEventListener('click', () => {
-    if (!navigator.geolocation) {
-      statusMsg.textContent = "Geolocation is not supported by your browser.";
-      return;
-    }
-
-    statusMsg.textContent = "Finding your position...";
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        map.setView([lat, lon], 15);
-        addMarker(lat, lon, "Your Current Location");
-        statusMsg.textContent = "Centered on your position.";
-      },
-      () => {
-        statusMsg.textContent = "Location access denied or unavailable.";
-      }
-    );
+  document.getElementById('route-btn').addEventListener('click', () => {
+    const dest = document.getElementById('end-input').value;
+    if (dest) startNavigation(dest);
   });
 });
