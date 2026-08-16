@@ -1,63 +1,87 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const mapElement = document.getElementById('map');
-  
+  // Tile Server Layers
   const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap'
   });
 
+  const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 18,
+    attribution: 'Esri'
+  });
+
+  // Map Initialization
   const map = L.map('map', {
     center: [51.505, -0.09],
-    zoom: 16,
+    zoom: 14,
     layers: [streetLayer]
   });
 
   let routingControl = null;
-  let watchId = null;
   let userMarker = null;
   let routeSteps = [];
   let currentStepIndex = 0;
   let selectedMode = 'car';
-  let isNavigating = false;
+  let watchId = null;
 
-  // Web Speech API for voice instructions
-  const synth = window.speechSynthesis;
+  const statusMsg = document.getElementById('status-message');
 
-  function speakAlert(text) {
+  // Text-To-Speech Output
+  function speak(text) {
     if ('speechSynthesis' in window) {
-      synth.cancel(); // Interrupt previous alert
+      window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.0;
-      synth.speak(utterance);
+      window.speechSynthesis.speak(utterance);
     }
   }
 
-  // --- Calculate Distance Between Coordinates (Haversine Formula) ---
+  // Haversine Distance Formula
   function getDistanceMeters(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
+    const p1 = lat1 * Math.PI / 180;
+    const p2 = lat2 * Math.PI / 180;
+    const dp = (lat2 - lat1) * Math.PI / 180;
+    const dl = (lon2 - lon1) * Math.PI / 180;
 
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c;
+    const a = Math.sin(dp/2) * Math.sin(dp/2) +
+              Math.cos(p1) * Math.cos(p2) *
+              Math.sin(dl/2) * Math.sin(dl/2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   }
 
-  // --- Calculate Bearing/Heading Direction ---
-  function getBearing(lat1, lon1, lat2, lon2) {
-    const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
-    const x = Math.cos(lat1) * Math.sin(lat2) -
-              Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
-    const brng = Math.atan2(y, x) * 180 / Math.PI;
-    return (brng + 360) % 360;
+  // UI Tabs
+  document.getElementById('tab-search').addEventListener('click', () => switchTab('search'));
+  document.getElementById('tab-directions').addEventListener('click', () => switchTab('directions'));
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+
+    if (tab === 'search') {
+      document.getElementById('tab-search').classList.add('active');
+      document.getElementById('panel-search').classList.add('active');
+    } else {
+      document.getElementById('tab-directions').classList.add('active');
+      document.getElementById('panel-directions').classList.add('active');
+    }
   }
 
-  // --- Mode Selection ---
+  // Layer Toggles
+  document.getElementById('btn-streets').addEventListener('click', function() {
+    map.removeLayer(satelliteLayer);
+    map.addLayer(streetLayer);
+    this.classList.add('active');
+    document.getElementById('btn-satellite').classList.remove('active');
+  });
+
+  document.getElementById('btn-satellite').addEventListener('click', function() {
+    map.removeLayer(streetLayer);
+    map.addLayer(satelliteLayer);
+    this.classList.add('active');
+    document.getElementById('btn-streets').classList.remove('active');
+  });
+
+  // Mode Selection
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
@@ -66,101 +90,166 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // --- Start Turn-by-Turn Navigation ---
-  async function startNavigation(destinationQuery) {
-    if (!navigator.geolocation) {
-      alert("Geolocation required for active car navigation.");
-      return;
+  // Geocoding Search Helper
+  async function geocode(query) {
+    if (!query) return null;
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (data && data.length > 0) {
+        return data;
+      }
+    } catch (e) {
+      console.error(e);
     }
-
-    // Resolve Destination
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(destinationQuery)}`);
-    const data = await res.json();
-    if (!data.length) {
-      alert("Destination not found.");
-      return;
-    }
-    const dest = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
-
-    // Begin Live GPS Tracking
-    watchId = navigator.geolocation.watchPosition(
-      (pos) => handlePositionUpdate(pos, dest),
-      (err) => console.error(err),
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
-    );
+    return null;
   }
 
-  function handlePositionUpdate(position, dest) {
-    const { latitude: lat, longitude: lon, heading } = position.coords;
+  // Live Dropdown Suggestions
+  const searchInput = document.getElementById('search-input');
+  const dropdown = document.getElementById('search-results');
 
-    // Initialize or Move Car Marker
+  searchInput.addEventListener('input', async () => {
+    const query = searchInput.value;
+    if (query.length < 3) {
+      dropdown.classList.remove('active');
+      return;
+    }
+
+    const results = await geocode(query);
+    if (results) {
+      dropdown.innerHTML = '';
+      results.slice(0, 5).forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'result-item';
+        div.textContent = item.display_name;
+        div.addEventListener('click', () => {
+          map.setView([item.lat, item.lon], 15);
+          L.marker([item.lat, item.lon]).addTo(map).bindPopup(item.display_name).openPopup();
+          dropdown.classList.remove('active');
+          searchInput.value = item.display_name.split(',')[0];
+        });
+        dropdown.appendChild(div);
+      });
+      dropdown.classList.add('active');
+    }
+  });
+
+  // Navigation Execution
+  document.getElementById('route-btn').addEventListener('click', async () => {
+    const startInput = document.getElementById('start-input').value;
+    const endInput = document.getElementById('end-input').value;
+
+    statusMsg.textContent = "Locating endpoints...";
+
+    const startData = await geocode(startInput);
+    const endData = await geocode(endInput);
+
+    if (!endData) {
+      statusMsg.textContent = "Destination point not found.";
+      return;
+    }
+
+    const end = { lat: parseFloat(endData[0].lat), lon: parseFloat(endData[0].lon) };
+
+    if (navigator.geolocation) {
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const lat = startData ? parseFloat(startData[0].lat) : pos.coords.latitude;
+          const lon = startData ? parseFloat(startData[0].lon) : pos.coords.longitude;
+
+          updateCarMarker(lat, lon);
+
+          if (!routingControl) {
+            calculateRoute([lat, lon], [end.lat, end.lon]);
+          } else {
+            checkTurnAlerts(lat, lon);
+          }
+        },
+        () => { statusMsg.textContent = "GPS Access Denied."; },
+        { enableHighAccuracy: true }
+      );
+    }
+  });
+
+  function updateCarMarker(lat, lon) {
+    map.setView([lat, lon], 17);
+
     if (!userMarker) {
-      const carIcon = L.divIcon({ className: 'user-car-marker' });
+      const carIcon = L.divIcon({
+        className: 'car-marker-icon',
+        html: '🚘',
+        iconSize: [30, 30]
+      });
       userMarker = L.marker([lat, lon], { icon: carIcon }).addTo(map);
-      
-      // Calculate initial route once position is established
-      buildRoute([lat, lon], dest);
     } else {
       userMarker.setLatLng([lat, lon]);
     }
-
-    map.setView([lat, lon], 17);
-
-    // --- CAR MODE: Rotate Camera in Direction of Movement ---
-    if (selectedMode === 'car') {
-      const moveHeading = heading !== null && !isNaN(heading) ? heading : 0;
-      mapElement.style.transform = `rotate(-${moveHeading}deg)`;
-    } else {
-      mapElement.style.transform = `rotate(0deg)`;
-    }
-
-    // --- Check Proximity & Trigger Maneuver Alerts ---
-    if (routeSteps.length > 0 && currentStepIndex < routeSteps.length) {
-      const step = routeSteps[currentStepIndex];
-      const distToNextStep = getDistanceMeters(lat, lon, step.latLng.lat, step.latLng.lng);
-
-      // Update Nav HUD
-      document.getElementById('nav-banner').classList.add('active');
-      document.getElementById('nav-instruction').textContent = step.instruction;
-      document.getElementById('nav-distance').textContent = `In ${Math.round(distToNextStep)} meters`;
-
-      // Trigger Voice Alert within 50 meters of turn
-      if (distToNextStep < 50 && !step.alerted) {
-        speakAlert(`In 50 meters, ${step.instruction}`);
-        step.alerted = true;
-        currentStepIndex++;
-      }
-    }
   }
 
-  function buildRoute(start, end) {
+  function calculateRoute(start, end) {
     if (routingControl) map.removeControl(routingControl);
 
     routingControl = L.Routing.control({
       waypoints: [L.latLng(start[0], start[1]), L.latLng(end[0], end[1])],
       router: L.Routing.osrmv1({ profile: selectedMode }),
-      lineOptions: { styles: [{ color: '#4285F4', weight: 6 }] },
+      lineOptions: { styles: [{ color: '#1a73e8', weight: 6 }] },
       show: false
     }).addTo(map);
 
-    // Extract step instructions from route for the Alert Engine
     routingControl.on('routesfound', (e) => {
-      const instructions = e.routes[0].instructions;
-      const coordinates = e.routes[0].coordinates;
-
-      routeSteps = instructions.map(i => ({
-        instruction: i.text,
-        latLng: coordinates[i.index],
+      const route = e.routes[0];
+      routeSteps = route.instructions.map(i => ({
+        text: i.text,
+        latLng: route.coordinates[i.index],
         alerted: false
       }));
-      
+
       currentStepIndex = 0;
-      speakAlert("Starting navigation.");
+      document.getElementById('nav-banner').classList.add('active');
+      statusMsg.textContent = "Route Active.";
+      speak("Starting navigation.");
     });
   }
 
-  document.getElementById('route-btn').addEventListener('click', () => {
-    const dest = document.getElementById('end-input').value;
-    if (dest) startNavigation(dest);
+  function checkTurnAlerts(lat, lon) {
+    if (!routeSteps.length || currentStepIndex >= routeSteps.length) return;
+
+    const step = routeSteps[currentStepIndex];
+    const dist = getDistanceMeters(lat, lon, step.latLng.lat, step.latLng.lng);
+
+    document.getElementById('nav-instruction').textContent = step.text;
+    document.getElementById('nav-distance').textContent = `In ${Math.round(dist)} meters`;
+
+    if (dist < 50 && !step.alerted) {
+      speak(`In 50 meters, ${step.text}`);
+      step.alerted = true;
+      currentStepIndex++;
+    }
+  }
+
+  // Clear Active Routes
+  document.getElementById('clear-route-btn').addEventListener('click', () => {
+    if (routingControl) map.removeControl(routingControl);
+    if (watchId) navigator.geolocation.clearWatch(watchId);
+    routingControl = null;
+    document.getElementById('nav-banner').classList.remove('active');
+    statusMsg.textContent = "Route Cleared.";
+  });
+
+  // Click to Drop Pin
+  map.on('click', (e) => {
+    L.marker([e.latlng.lat, e.latlng.lng]).addTo(map)
+      .bindPopup(`Pinned Location<br>${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`).openPopup();
+  });
+
+  // Recenter Geolocation Button
+  document.getElementById('btn-location').addEventListener('click', () => {
+    navigator.geolocation.getCurrentPosition(pos => {
+      map.setView([pos.coords.latitude, pos.coords.longitude], 16);
+      L.marker([pos.coords.latitude, pos.coords.longitude]).addTo(map).bindPopup("Current Location").openPopup();
+    });
   });
 });
