@@ -1,8 +1,76 @@
-<!-- Navigation HUD Banner -->
-<div id="nav-banner">
-  <div class="nav-icon">⬆️</div>
-  <div class="nav-details">
-    <div id="nav-instruction" class="nav-instruction">Head North</div>
-    <div id="nav-distance" class="nav-distance">In 100 meters</div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Google Maps Clone</title>
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Navigation Banner -->
+  <div id="nav-banner">
+    <div class="nav-icon">🚗</div>
+    <div class="nav-details">
+      <div id="nav-instruction">Head towards route</div>
+      <div id="nav-distance">Calculating...</div>
+    </div>
   </div>
-</div>
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div class="brand">
+      <span class="logo-text"><span class="blue">G</span><span class="red">o</span><span class="yellow">o</span><span class="blue">g</span><span class="green">l</span><span class="red">e</span> Maps Clone</span>
+    </div>
+
+    <div class="tab-group">
+      <button class="tab-btn active" id="tab-search">Search</button>
+      <button class="tab-btn" id="tab-directions">Directions</button>
+    </div>
+
+    <!-- Search Panel -->
+    <div id="panel-search" class="panel active">
+      <div class="input-wrapper">
+        <input type="text" id="search-input" placeholder="Search Google Maps..." />
+        <button id="search-btn">🔍</button>
+      </div>
+    </div>
+
+    <!-- Directions Panel -->
+    <div id="panel-directions" class="panel">
+      <div class="travel-modes">
+        <button class="mode-btn active" data-mode="car">🚗 Drive</button>
+        <button class="mode-btn" data-mode="foot">🚶 Walk</button>
+        <button class="mode-btn" data-mode="bike">🚴 Bike</button>
+      </div>
+      <div class="input-wrapper">
+        <input type="text" id="start-input" placeholder="Start location..." />
+      </div>
+      <div class="input-wrapper">
+        <input type="text" id="end-input" placeholder="Destination..." />
+      </div>
+      <button id="route-btn" class="primary-btn">Start Navigation</button>
+      <button id="clear-route-btn" class="secondary-btn">Clear Route</button>
+    </div>
+
+    <div id="status-message">Click anywhere on the map to drop a custom pin.</div>
+  </div>
+
+  <!-- Map Viewport -->
+  <div id="map"></div>
+
+  <!-- Controls -->
+  <div id="layer-controls">
+    <button id="btn-streets" class="layer-btn active">Map</button>
+    <button id="btn-satellite" class="layer-btn">Satellite</button>
+    <button id="btn-location" class="layer-btn" title="My Location">🎯</button>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
