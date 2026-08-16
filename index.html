@@ -2,30 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Google Maps Clone</title>
   
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <!-- Leaflet Core CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet Routing Machine CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-  <!-- Navigation Banner -->
+  <!-- Active Turn-by-Turn Header -->
   <div id="nav-banner">
     <div class="nav-icon">🚗</div>
     <div class="nav-details">
-      <div id="nav-instruction">Head towards route</div>
-      <div id="nav-distance">Calculating...</div>
+      <div id="nav-instruction">Head towards destination</div>
+      <div id="nav-distance">Calculating route...</div>
     </div>
   </div>
 
-  <!-- Sidebar -->
+  <!-- Google Maps Style Sidebar -->
   <div id="sidebar">
     <div class="brand">
-      <span class="logo-text"><span class="blue">G</span><span class="red">o</span><span class="yellow">o</span><span class="blue">g</span><span class="green">l</span><span class="red">e</span> Maps Clone</span>
+      <span class="logo-text"><span class="blue">G</span><span class="red">o</span><span class="yellow">o</span><span class="blue">g</span><span class="green">l</span><span class="red">e</span> Maps</span>
     </div>
 
+    <!-- Interface Mode Tabs -->
     <div class="tab-group">
       <button class="tab-btn active" id="tab-search">Search</button>
       <button class="tab-btn" id="tab-directions">Directions</button>
@@ -34,9 +37,10 @@
     <!-- Search Panel -->
     <div id="panel-search" class="panel active">
       <div class="input-wrapper">
-        <input type="text" id="search-input" placeholder="Search Google Maps..." />
+        <input type="text" id="search-input" placeholder="Search Google Maps..." autocomplete="off" />
         <button id="search-btn">🔍</button>
       </div>
+      <div id="search-results" class="results-dropdown"></div>
     </div>
 
     <!-- Directions Panel -->
@@ -47,10 +51,10 @@
         <button class="mode-btn" data-mode="bike">🚴 Bike</button>
       </div>
       <div class="input-wrapper">
-        <input type="text" id="start-input" placeholder="Start location..." />
+        <input type="text" id="start-input" placeholder="Choose starting point..." />
       </div>
       <div class="input-wrapper">
-        <input type="text" id="end-input" placeholder="Destination..." />
+        <input type="text" id="end-input" placeholder="Choose destination..." />
       </div>
       <button id="route-btn" class="primary-btn">Start Navigation</button>
       <button id="clear-route-btn" class="secondary-btn">Clear Route</button>
@@ -59,17 +63,18 @@
     <div id="status-message">Click anywhere on the map to drop a custom pin.</div>
   </div>
 
-  <!-- Map Viewport -->
+  <!-- Map Canvas -->
   <div id="map"></div>
 
-  <!-- Controls -->
+  <!-- Map Controls -->
   <div id="layer-controls">
     <button id="btn-streets" class="layer-btn active">Map</button>
     <button id="btn-satellite" class="layer-btn">Satellite</button>
     <button id="btn-location" class="layer-btn" title="My Location">🎯</button>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <!-- JS Libraries -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
   <script src="script.js"></script>
 </body>
