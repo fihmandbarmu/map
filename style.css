@@ -32,6 +32,12 @@ body {
   gap: 8px;
 }
 
+#controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 input[type="text"] {
   flex: 1;
   padding: 10px;
@@ -55,12 +61,19 @@ button:hover {
 }
 
 #location-btn {
-  width: 100%;
   background-color: #34a853;
 }
 
 #location-btn:hover {
   background-color: #2d8e47;
+}
+
+button.secondary {
+  background-color: #ea4335;
+}
+
+button.secondary:hover {
+  background-color: #c5221f;
 }
 
 #results {
@@ -72,4 +85,23 @@ button:hover {
 #map {
   flex: 1;
   height: 100%;
+}
+
+/* Custom Marker Form Inside Leaflet Popup */
+.marker-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 180px;
+}
+
+.marker-form input {
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.marker-form button {
+  padding: 6px;
+  font-size: 0.85rem;
 }
