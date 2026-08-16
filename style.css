@@ -2,106 +2,167 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: "Google Sans", Roboto, Arial, sans-serif;
 }
 
 body {
-  display: flex;
   height: 100vh;
+  width: 100vw;
   overflow: hidden;
-}
-
-#sidebar {
-  width: 320px;
-  background-color: #ffffff;
-  padding: 20px;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-#sidebar h2 {
-  font-size: 1.25rem;
-  color: #1a73e8;
-}
-
-.search-box {
-  display: flex;
-  gap: 8px;
-}
-
-#controls {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-input[type="text"] {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 0.9rem;
-}
-
-button {
-  padding: 10px 14px;
-  background-color: #1a73e8;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-button:hover {
-  background-color: #1557b0;
-}
-
-#location-btn {
-  background-color: #34a853;
-}
-
-#location-btn:hover {
-  background-color: #2d8e47;
-}
-
-button.secondary {
-  background-color: #ea4335;
-}
-
-button.secondary:hover {
-  background-color: #c5221f;
-}
-
-#results {
-  font-size: 0.85rem;
-  color: #555;
-  margin-top: 10px;
+  position: relative;
 }
 
 #map {
-  flex: 1;
+  width: 100%;
   height: 100%;
+  z-index: 1;
 }
 
-/* Custom Marker Form Inside Leaflet Popup */
-.marker-form {
+/* Floating Sidebar Interface */
+#sidebar {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 360px;
+  max-height: calc(100vh - 32px);
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  z-index: 1000;
   display: flex;
   flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.brand {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.blue { color: #4285f4; }
+.red { color: #ea4335; }
+.yellow { color: #fbbc05; }
+.green { color: #34a853; }
+
+.tab-group {
+  display: flex;
+  border-bottom: 2px solid #e6e6e6;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 8px;
+  background: none;
+  border: none;
+  font-weight: 600;
+  color: #5f6368;
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  color: #1a73e8;
+  border-bottom: 2px solid #1a73e8;
+}
+
+.panel {
+  display: none;
+  flex-direction: column;
   gap: 8px;
-  min-width: 180px;
 }
 
-.marker-form input {
-  padding: 6px;
-  border: 1px solid #ccc;
+.panel.active {
+  display: flex;
+}
+
+.input-wrapper {
+  display: flex;
+  background: #f1f3f4;
   border-radius: 4px;
+  padding: 4px 8px;
 }
 
-.marker-form button {
+.input-wrapper input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 8px;
+  font-size: 0.95rem;
+  outline: none;
+}
+
+.travel-modes {
+  display: flex;
+  gap: 4px;
+}
+
+.mode-btn {
+  flex: 1;
   padding: 6px;
+  border: 1px solid #dadce0;
+  background: #fff;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  background: #e8f0fe;
+  color: #1967d2;
+  border-color: #1967d2;
+}
+
+button.primary-btn {
+  background: #1a73e8;
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button.secondary-btn {
+  background: #f1f3f4;
+  color: #3c4043;
+  border: none;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#info-panel {
   font-size: 0.85rem;
+  color: #3c4043;
+  border-top: 1px solid #e6e6e6;
+  padding-top: 8px;
+}
+
+/* Layer Control Widget */
+#layer-controls {
+  position: absolute;
+  bottom: 24px;
+  left: 16px;
+  z-index: 1000;
+  display: flex;
+  gap: 8px;
+  background: white;
+  padding: 4px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+.layer-btn {
+  border: none;
+  background: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #5f6368;
+}
+
+.layer-btn.active {
+  background: #e8f0fe;
+  color: #1a73e8;
 }
