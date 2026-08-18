@@ -4,22 +4,27 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Google Maps Clone</title>
+
+  <!-- Favicon Implementations -->
+  <link rel="icon" type="image/png" sizes="32x32" href="https://cdn-icons-png.flaticon.com/512/854/854878.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="https://cdn-icons-png.flaticon.com/512/854/854878.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="https://cdn-icons-png.flaticon.com/512/854/854878.png" />
+  <link rel="shortcut icon" href="https://cdn-icons-png.flaticon.com/512/854/854878.png" />
   
-  <!-- PWA Manifest & Theme Color -->
+  <!-- PWA Manifest & Theme -->
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#1a73e8" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/854/854878.png" />
 
-  <!-- Leaflet CSS -->
+  <!-- External Stylesheets -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-  <!-- Active Turn-by-Turn Header -->
+  <!-- Active Turn-by-Turn Banner -->
   <div id="nav-banner">
     <div class="nav-icon">🚗</div>
     <div class="nav-details">
@@ -28,15 +33,14 @@
     </div>
   </div>
 
-  <!-- Google Maps Style Sidebar -->
+  <!-- Main Control Sidebar -->
   <div id="sidebar">
     <div class="brand">
       <span class="logo-text"><span class="blue">G</span><span class="red">o</span><span class="yellow">o</span><span class="blue">g</span><span class="green">l</span><span class="red">e</span> Maps</span>
-      <!-- Open App instance in a New Browser Tab -->
       <a href="./index.html" target="_blank" rel="noopener noreferrer" style="float: right; text-decoration: none; font-size: 0.8rem; color: #1a73e8;">Open in New Tab ↗</a>
     </div>
 
-    <!-- Interface Mode Tabs -->
+    <!-- Mode Tabs -->
     <div class="tab-group">
       <button class="tab-btn active" id="tab-search">Search</button>
       <button class="tab-btn" id="tab-directions">Directions</button>
@@ -54,14 +58,11 @@
     <!-- Directions Panel -->
     <div id="panel-directions" class="panel">
       <div class="travel-modes">
-       <!-- Directions Panel Travel Modes -->
-<div class="travel-modes">
-  <button class="mode-btn active" data-mode="car" data-color="#1a73e8">🚗 Drive</button>
-  <button class="mode-btn" data-mode="foot" data-color="#34a853">🚶 Walk</button>
-  <button class="mode-btn" data-mode="bike" data-color="#fbbc05">🚴 Bike</button>
-  <button class="mode-btn" data-mode="train" data-color="#a142f4">🚆 Train</button>
-  <button class="mode-btn" data-mode="plane" data-color="#ea4335">✈️ Flight</button>
-</div>
+        <button class="mode-btn active" data-mode="car" data-color="#1a73e8">🚗 Drive</button>
+        <button class="mode-btn" data-mode="foot" data-color="#34a853">🚶 Walk</button>
+        <button class="mode-btn" data-mode="bike" data-color="#fbbc05">🚴 Bike</button>
+        <button class="mode-btn" data-mode="train" data-color="#a142f4">🚆 Train</button>
+        <button class="mode-btn" data-mode="plane" data-color="#ea4335">✈️ Flight</button>
       </div>
       <div class="input-wrapper">
         <input type="text" id="start-input" placeholder="Choose starting point..." />
@@ -73,7 +74,7 @@
       <button id="clear-route-btn" class="secondary-btn">Clear Route</button>
     </div>
 
-    <!-- App Install Banner Button -->
+    <!-- Install App Button -->
     <button id="install-pwa-btn" class="primary-btn" style="display: none; background: #34a853; margin-top: 8px;">
       📲 Download Map App
     </button>
@@ -81,26 +82,24 @@
     <div id="status-message">Click anywhere on the map to drop a custom pin.</div>
   </div>
 
-  <!-- Map Canvas -->
+  <!-- Map Canvas Container -->
   <div id="map"></div>
 
-  <!-- Map Controls -->
+  <!-- Map View Switchers -->
   <div id="layer-controls">
     <button id="btn-streets" class="layer-btn active">Map</button>
     <button id="btn-satellite" class="layer-btn">Satellite</button>
     <button id="btn-location" class="layer-btn" title="My Location">🎯</button>
   </div>
 
-  <!-- Service Worker and PWA Install Handler -->
+  <!-- PWA & Service Worker Registration -->
   <script>
-    // 1. Register Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js')
         .then(() => console.log('Service Worker Registered Successfully.'))
         .catch(err => console.error('Service Worker Registration Failed:', err));
     }
 
-    // 2. Handle PWA App Download Prompt
     let deferredPrompt;
     const installBtn = document.getElementById('install-pwa-btn');
 
@@ -122,7 +121,7 @@
     });
   </script>
 
-  <!-- JS Libraries -->
+  <!-- External JS Dependencies -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
   <script src="script.js"></script>
