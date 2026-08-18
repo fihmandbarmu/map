@@ -1,10 +1,11 @@
-const CACHE_NAME = 'maps-app-v1';
+const CACHE_NAME = 'maps-app-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
   './script.js',
   './manifest.json',
+  'https://cdn-icons-png.flaticon.com/512/854/854878.png',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
