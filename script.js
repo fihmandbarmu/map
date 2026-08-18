@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   }
 
-  // Get Current Location Helper (Promise-based)
+  // Get Current Location Helper
   function GetCurrentPosition() {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
@@ -105,101 +105,128 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Geocoding Search Helper
-  async function geocode(query) {
-    if (!query || !query.trim()) return null;
+  // High-Volume Geocoding Engine
+  async function geocode(query, limit = 50) {
+    if (!query || !query.trim()) return [];
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+      // Increased search limit to return maximum match density
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=${limit}&addressdetails=1`);
       const data = await res.json();
-      if (data && data.length > 0) {
-        return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
-      }
+      return data || [];
     } catch (e) {
       console.error(e);
+      return [];
     }
-    return null;
   }
 
-  // Live Dropdown Suggestions
-  const searchInput = document.getElementById('search-input');
-  const dropdown = document.getElementById('search-results');
+  // Universal Live Autocomplete Generator for Inputs
+  function attachAutocomplete(inputEl, resultsContainerId) {
+    let debounceTimer;
 
-  searchInput.addEventListener('input', async () => {
-    const query = searchInput.value;
-    if (query.length < 3) {
-      dropdown.classList.remove('active');
-      return;
+    // Create dropdown container if missing
+    let dropdown = document.getElementById(resultsContainerId);
+    if (!dropdown) {
+      dropdown = document.createElement('div');
+      dropdown.id = resultsContainerId;
+      dropdown.className = 'results-dropdown';
+      inputEl.parentNode.appendChild(dropdown);
     }
 
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
-      const results = await res.json();
-      if (results && results.length > 0) {
-        dropdown.innerHTML = '';
-        results.slice(0, 5).forEach(item => {
-          const div = document.createElement('div');
-          div.className = 'result-item';
-          div.textContent = item.display_name;
-          div.addEventListener('click', () => {
-            const lat = parseFloat(item.lat);
-            const lon = parseFloat(item.lon);
-            map.setView([lat, lon], 15);
-            L.marker([lat, lon]).addTo(map).bindPopup(item.display_name).openPopup();
-            dropdown.classList.remove('active');
-            searchInput.value = item.display_name.split(',')[0];
-          });
-          dropdown.appendChild(div);
-        });
-        dropdown.classList.add('active');
+    inputEl.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const query = inputEl.value.trim();
+
+      if (query.length === 0) {
+        dropdown.classList.remove('active');
+        return;
       }
-    } catch (err) {
-      console.error(err);
-    }
-  });
 
-  // --- START NAVIGATION BUTTON FIX ---
+      // Debounce requests to allow fast typing on any character/number
+      debounceTimer = setTimeout(async () => {
+        const results = await geocode(query, 50);
+        if (results.length > 0) {
+          dropdown.innerHTML = '';
+          results.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'result-item';
+            div.textContent = item.display_name;
+            div.addEventListener('click', () => {
+              inputEl.value = item.display_name;
+              dropdown.classList.remove('active');
+              
+              if (inputEl.id === 'search-input') {
+                const lat = parseFloat(item.lat);
+                const lon = parseFloat(item.lon);
+                map.setView([lat, lon], 15);
+                L.marker([lat, lon]).addTo(map).bindPopup(item.display_name).openPopup();
+              }
+            });
+            dropdown.appendChild(div);
+          });
+          dropdown.classList.add('active');
+        } else {
+          dropdown.classList.remove('active');
+        }
+      }, 250);
+    });
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+      if (!inputEl.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.remove('active');
+      }
+    });
+  }
+
+  // Attach dynamic autocomplete to Search, Start, and End directions inputs
+  attachAutocomplete(document.getElementById('search-input'), 'search-results');
+  attachAutocomplete(document.getElementById('start-input'), 'start-results');
+  attachAutocomplete(document.getElementById('end-input'), 'end-results');
+
+  // Navigation Button Handler
   document.getElementById('route-btn').addEventListener('click', async () => {
     const startInput = document.getElementById('start-input').value.trim();
     const endInput = document.getElementById('end-input').value.trim();
 
     if (!endInput) {
-      statusMsg.textContent = "Please type a destination address.";
+      statusMsg.textContent = "Please choose a destination point.";
       return;
     }
 
     statusMsg.textContent = "Calculating route...";
 
     try {
-      // 1. Resolve Destination Coordinates
-      const endCoords = await geocode(endInput);
-      if (!endCoords) {
+      // 1. Resolve Destination
+      const endData = await geocode(endInput, 1);
+      if (!endData.length) {
         statusMsg.textContent = "Destination address not found.";
         return;
       }
+      const endCoords = [parseFloat(endData[0].lat), parseFloat(endData[0].lon)];
 
-      // 2. Resolve Start Coordinates (Use GPS if start box is empty)
+      // 2. Resolve Start (Default to live GPS if start is empty)
       let startCoords = null;
       if (startInput) {
-        startCoords = await geocode(startInput);
-        if (!startCoords) {
-          statusMsg.textContent = "Starting address not found.";
+        const startData = await geocode(startInput, 1);
+        if (!startData.length) {
+          statusMsg.textContent = "Starting location not found.";
           return;
         }
+        startCoords = [parseFloat(startData[0].lat), parseFloat(startData[0].lon)];
       } else {
         statusMsg.textContent = "Acquiring GPS location...";
         try {
           startCoords = await GetCurrentPosition();
         } catch (err) {
-          statusMsg.textContent = "GPS location unavailable. Please enter a start location manually.";
+          statusMsg.textContent = "GPS unavailable. Type a start location manually.";
           return;
         }
       }
 
-      // 3. Render Route instantly
+      // 3. Render Route and Start Live GPS Tracking
       calculateRoute(startCoords, endCoords);
       updateCarMarker(startCoords[0], startCoords[1]);
 
-      // 4. Start Live GPS Tracking
       if (navigator.geolocation) {
         if (watchId) navigator.geolocation.clearWatch(watchId);
         watchId = navigator.geolocation.watchPosition(
@@ -215,7 +242,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (e) {
       console.error(e);
-      statusMsg.textContent = "Failed to start navigation. Please try again.";
+      statusMsg.textContent = "Failed to calculate navigation route.";
     }
   });
 
@@ -260,7 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     routingControl.on('routingerror', () => {
-      statusMsg.textContent = "Could not find a route between these locations.";
+      statusMsg.textContent = "Could not find a valid route between these locations.";
     });
   }
 
@@ -285,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (routingControl) map.removeControl(routingControl);
     if (watchId) navigator.geolocation.clearWatch(watchId);
     if (userMarker) map.removeLayer(userMarker);
-    
+
     routingControl = null;
     userMarker = null;
     document.getElementById('nav-banner').classList.remove('active');
