@@ -18,10 +18,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   let routingControl = null;
+  let flightPolyline = null;
   let userMarker = null;
   let routeSteps = [];
   let currentStepIndex = 0;
+  
+  // Transport Mode Settings
   let selectedMode = 'car';
+  let routeColor = '#1a73e8'; // Default Blue for Drive
   let watchId = null;
 
   const statusMsg = document.getElementById('status-message');
@@ -64,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // UI Tabs
+  // Tab Switcher
   document.getElementById('tab-search').addEventListener('click', () => switchTab('search'));
   document.getElementById('tab-directions').addEventListener('click', () => switchTab('directions'));
 
@@ -96,34 +100,34 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-streets').classList.remove('active');
   });
 
-  // Mode Selection
+  // Color & Transport Mode Selection
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-      e.target.classList.add('active');
-      selectedMode = e.target.dataset.mode;
+      const target = e.currentTarget;
+      target.classList.add('active');
+      
+      selectedMode = target.dataset.mode;
+      routeColor = target.dataset.color; // Unique color per mode
     });
   });
 
-  // High-Volume Geocoding Engine
+  // Geocoding Search Engine
   async function geocode(query, limit = 50) {
     if (!query || !query.trim()) return [];
     try {
-      // Increased search limit to return maximum match density
       const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=${limit}&addressdetails=1`);
-      const data = await res.json();
-      return data || [];
+      return await res.json();
     } catch (e) {
       console.error(e);
       return [];
     }
   }
 
-  // Universal Live Autocomplete Generator for Inputs
+  // Universal Live Autocomplete
   function attachAutocomplete(inputEl, resultsContainerId) {
     let debounceTimer;
 
-    // Create dropdown container if missing
     let dropdown = document.getElementById(resultsContainerId);
     if (!dropdown) {
       dropdown = document.createElement('div');
@@ -141,7 +145,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Debounce requests to allow fast typing on any character/number
       debounceTimer = setTimeout(async () => {
         const results = await geocode(query, 50);
         if (results.length > 0) {
@@ -170,7 +173,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 250);
     });
 
-    // Close on outside click
     document.addEventListener('click', (e) => {
       if (!inputEl.contains(e.target) && !dropdown.contains(e.target)) {
         dropdown.classList.remove('active');
@@ -178,25 +180,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Attach dynamic autocomplete to Search, Start, and End directions inputs
   attachAutocomplete(document.getElementById('search-input'), 'search-results');
   attachAutocomplete(document.getElementById('start-input'), 'start-results');
   attachAutocomplete(document.getElementById('end-input'), 'end-results');
 
-  // Navigation Button Handler
+  // Multi-Mode Navigation Calculation
   document.getElementById('route-btn').addEventListener('click', async () => {
     const startInput = document.getElementById('start-input').value.trim();
     const endInput = document.getElementById('end-input').value.trim();
 
     if (!endInput) {
-      statusMsg.textContent = "Please choose a destination point.";
+      statusMsg.textContent = "Please select a destination.";
       return;
     }
 
-    statusMsg.textContent = "Calculating route...";
+    statusMsg.textContent = "Calculating path...";
 
     try {
-      // 1. Resolve Destination
       const endData = await geocode(endInput, 1);
       if (!endData.length) {
         statusMsg.textContent = "Destination address not found.";
@@ -204,7 +204,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       const endCoords = [parseFloat(endData[0].lat), parseFloat(endData[0].lon)];
 
-      // 2. Resolve Start (Default to live GPS if start is empty)
       let startCoords = null;
       if (startInput) {
         const startData = await geocode(startInput, 1);
@@ -223,9 +222,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // 3. Render Route and Start Live GPS Tracking
-      calculateRoute(startCoords, endCoords);
-      updateCarMarker(startCoords[0], startCoords[1]);
+      // Render mode route
+      clearActiveRoutes();
+      if (selectedMode === 'plane') {
+        calculateFlightPath(startCoords, endCoords);
+      } else {
+        calculateRoadOrRailRoute(startCoords, endCoords);
+      }
+
+      updateVehicleMarker(startCoords[0], startCoords[1]);
 
       if (navigator.geolocation) {
         if (watchId) navigator.geolocation.clearWatch(watchId);
@@ -233,41 +238,52 @@ document.addEventListener('DOMContentLoaded', () => {
           (pos) => {
             const currentLat = pos.coords.latitude;
             const currentLon = pos.coords.longitude;
-            updateCarMarker(currentLat, currentLon);
+            updateVehicleMarker(currentLat, currentLon);
             checkTurnAlerts(currentLat, currentLon);
           },
-          (err) => console.warn("GPS tracking warning:", err.message),
+          (err) => console.warn("GPS tracking issue:", err.message),
           { enableHighAccuracy: true }
         );
       }
     } catch (e) {
       console.error(e);
-      statusMsg.textContent = "Failed to calculate navigation route.";
+      statusMsg.textContent = "Failed to calculate navigation path.";
     }
   });
 
-  function updateCarMarker(lat, lon) {
-    map.setView([lat, lon], 16);
+  // Calculate Airplane Curved Flight Route
+  function calculateFlightPath(start, end) {
+    const midLat = (start[0] + end[0]) / 2 + 0.5; // Curved arc peak
+    const midLon = (start[1] + end[1]) / 2;
 
-    if (!userMarker) {
-      const carIcon = L.divIcon({
-        className: 'car-marker-icon',
-        html: '🚘',
-        iconSize: [30, 30]
-      });
-      userMarker = L.marker([lat, lon], { icon: carIcon }).addTo(map);
-    } else {
-      userMarker.setLatLng([lat, lon]);
-    }
+    const latLngs = [start, [midLat, midLon], end];
+
+    flightPolyline = L.polyline(latLngs, {
+      color: routeColor, // Red dashed line for flight
+      weight: 5,
+      dashArray: '10, 10',
+      lineCap: 'round'
+    }).addTo(map);
+
+    map.fitBounds(flightPolyline.getBounds(), { padding: [50, 50] });
+
+    document.getElementById('nav-banner').classList.add('active');
+    document.getElementById('nav-instruction').textContent = "Direct Flight Path";
+    document.getElementById('nav-distance').textContent = `Est. ${Math.round(getDistanceMeters(start[0], start[1], end[0], end[1]) / 1000)} km`;
+    statusMsg.textContent = "Flight Path Active.";
+    speak("Starting flight route tracking.");
   }
 
-  function calculateRoute(start, end) {
-    if (routingControl) map.removeControl(routingControl);
+  // Calculate Road or Train Route
+  function calculateRoadOrRailRoute(start, end) {
+    const profile = (selectedMode === 'train') ? 'car' : selectedMode;
 
     routingControl = L.Routing.control({
       waypoints: [L.latLng(start[0], start[1]), L.latLng(end[0], end[1])],
-      router: L.Routing.osrmv1({ profile: selectedMode }),
-      lineOptions: { styles: [{ color: '#1a73e8', weight: 6 }] },
+      router: L.Routing.osrmv1({ profile: profile }),
+      lineOptions: { 
+        styles: [{ color: routeColor, weight: selectedMode === 'train' ? 8 : 6 }] 
+      },
       show: false,
       addWaypoints: false
     }).addTo(map);
@@ -282,13 +298,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
       currentStepIndex = 0;
       document.getElementById('nav-banner').classList.add('active');
-      statusMsg.textContent = "Route Active.";
-      speak("Starting navigation.");
+      statusMsg.textContent = `${selectedMode.toUpperCase()} Route Active.`;
+      speak(`Starting ${selectedMode} navigation.`);
     });
+  }
 
-    routingControl.on('routingerror', () => {
-      statusMsg.textContent = "Could not find a valid route between these locations.";
-    });
+  // Update Dynamic Vehicle Marker Icon
+  function updateVehicleMarker(lat, lon) {
+    map.setView([lat, lon], 14);
+
+    let vehicleEmoji = '🚘';
+    if (selectedMode === 'foot') vehicleEmoji = '🚶';
+    if (selectedMode === 'bike') vehicleEmoji = '🚴';
+    if (selectedMode === 'train') vehicleEmoji = '🚆';
+    if (selectedMode === 'plane') vehicleEmoji = '✈️';
+
+    if (!userMarker) {
+      const icon = L.divIcon({
+        className: 'car-marker-icon',
+        html: vehicleEmoji,
+        iconSize: [30, 30]
+      });
+      userMarker = L.marker([lat, lon], { icon: icon }).addTo(map);
+    } else {
+      userMarker.setLatLng([lat, lon]);
+    }
   }
 
   function checkTurnAlerts(lat, lon) {
@@ -307,14 +341,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Clear Active Routes
-  document.getElementById('clear-route-btn').addEventListener('click', () => {
+  function clearActiveRoutes() {
     if (routingControl) map.removeControl(routingControl);
-    if (watchId) navigator.geolocation.clearWatch(watchId);
+    if (flightPolyline) map.removeLayer(flightPolyline);
     if (userMarker) map.removeLayer(userMarker);
 
     routingControl = null;
+    flightPolyline = null;
     userMarker = null;
+    routeSteps = [];
+  }
+
+  // Clear Route Button
+  document.getElementById('clear-route-btn').addEventListener('click', () => {
+    clearActiveRoutes();
+    if (watchId) navigator.geolocation.clearWatch(watchId);
     document.getElementById('nav-banner').classList.remove('active');
     statusMsg.textContent = "Route Cleared.";
   });
@@ -325,7 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .bindPopup(`Pinned Location<br>${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`).openPopup();
   });
 
-  // Recenter Geolocation Button
+  // Location Recenter
   document.getElementById('btn-location').addEventListener('click', () => {
     navigator.geolocation.getCurrentPosition(pos => {
       map.setView([pos.coords.latitude, pos.coords.longitude], 16);
