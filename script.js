@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // Tile Server Layers
+  // Map Base Tile Layers
   const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap'
@@ -23,14 +23,14 @@ document.addEventListener('DOMContentLoaded', () => {
   let routeSteps = [];
   let currentStepIndex = 0;
   
-  // Transport Mode Settings
+  // Dynamic Route Modes & Colors
   let selectedMode = 'car';
-  let routeColor = '#1a73e8'; // Default Blue for Drive
+  let routeColor = '#1a73e8';
   let watchId = null;
 
   const statusMsg = document.getElementById('status-message');
 
-  // Text-To-Speech Output
+  // Text-To-Speech Synthesis
   function speak(text) {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Haversine Distance Formula
+  // Haversine Spherical Distance Formula
   function getDistanceMeters(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
     const p1 = lat1 * Math.PI / 180;
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   }
 
-  // Get Current Location Helper
+  // Geolocation Position Promise
   function GetCurrentPosition() {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Tab Switcher
+  // Panel View Tabs
   document.getElementById('tab-search').addEventListener('click', () => switchTab('search'));
   document.getElementById('tab-directions').addEventListener('click', () => switchTab('directions'));
 
@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Layer Toggles
+  // Map Tile Controls
   document.getElementById('btn-streets').addEventListener('click', function() {
     map.removeLayer(satelliteLayer);
     map.addLayer(streetLayer);
@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-streets').classList.remove('active');
   });
 
-  // Color & Transport Mode Selection
+  // Transport Mode & Color Toggle
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
@@ -108,11 +108,11 @@ document.addEventListener('DOMContentLoaded', () => {
       target.classList.add('active');
       
       selectedMode = target.dataset.mode;
-      routeColor = target.dataset.color; // Unique color per mode
+      routeColor = target.dataset.color;
     });
   });
 
-  // Geocoding Search Engine
+  // Nominatim Search Geocoder
   async function geocode(query, limit = 50) {
     if (!query || !query.trim()) return [];
     try {
@@ -124,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Universal Live Autocomplete
+  // Dynamic Multi-Input Autocomplete
   function attachAutocomplete(inputEl, resultsContainerId) {
     let debounceTimer;
 
@@ -184,7 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
   attachAutocomplete(document.getElementById('start-input'), 'start-results');
   attachAutocomplete(document.getElementById('end-input'), 'end-results');
 
-  // Multi-Mode Navigation Calculation
+  // Navigation Trigger Execution
   document.getElementById('route-btn').addEventListener('click', async () => {
     const startInput = document.getElementById('start-input').value.trim();
     const endInput = document.getElementById('end-input').value.trim();
@@ -222,7 +222,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // Render mode route
       clearActiveRoutes();
       if (selectedMode === 'plane') {
         calculateFlightPath(startCoords, endCoords);
@@ -251,15 +250,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Calculate Airplane Curved Flight Route
+  // Calculate Airplane Flight Path (Dashed Arc Line)
   function calculateFlightPath(start, end) {
-    const midLat = (start[0] + end[0]) / 2 + 0.5; // Curved arc peak
+    const midLat = (start[0] + end[0]) / 2 + 0.5;
     const midLon = (start[1] + end[1]) / 2;
 
     const latLngs = [start, [midLat, midLon], end];
 
     flightPolyline = L.polyline(latLngs, {
-      color: routeColor, // Red dashed line for flight
+      color: routeColor,
       weight: 5,
       dashArray: '10, 10',
       lineCap: 'round'
@@ -274,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
     speak("Starting flight route tracking.");
   }
 
-  // Calculate Road or Train Route
+  // Calculate Standard Road & Rail Routes
   function calculateRoadOrRailRoute(start, end) {
     const profile = (selectedMode === 'train') ? 'car' : selectedMode;
 
@@ -303,7 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Update Dynamic Vehicle Marker Icon
+  // Update Dynamic Map Pin/Vehicle Icon
   function updateVehicleMarker(lat, lon) {
     map.setView([lat, lon], 14);
 
@@ -352,7 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
     routeSteps = [];
   }
 
-  // Clear Route Button
+  // Clear Active Path Button
   document.getElementById('clear-route-btn').addEventListener('click', () => {
     clearActiveRoutes();
     if (watchId) navigator.geolocation.clearWatch(watchId);
@@ -360,13 +359,13 @@ document.addEventListener('DOMContentLoaded', () => {
     statusMsg.textContent = "Route Cleared.";
   });
 
-  // Click to Drop Pin
+  // Map Click Pin Drop Listener
   map.on('click', (e) => {
     L.marker([e.latlng.lat, e.latlng.lng]).addTo(map)
       .bindPopup(`Pinned Location<br>${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`).openPopup();
   });
 
-  // Location Recenter
+  // Location Recenter Button
   document.getElementById('btn-location').addEventListener('click', () => {
     navigator.geolocation.getCurrentPosition(pos => {
       map.setView([pos.coords.latitude, pos.coords.longitude], 16);
