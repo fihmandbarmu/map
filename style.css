@@ -17,7 +17,7 @@ html, body {
   z-index: 1;
 }
 
-/* Turn-by-Turn Banner */
+/* Turn-by-Turn Header Overlay */
 #nav-banner {
   display: none;
   position: absolute;
@@ -44,17 +44,17 @@ html, body {
   font-size: 1.8rem;
 }
 
-.nav-instruction {
+#nav-instruction {
   font-size: 1rem;
   font-weight: bold;
 }
 
-.nav-distance {
+#nav-distance {
   font-size: 0.85rem;
   opacity: 0.9;
 }
 
-/* Floating Sidebar */
+/* Sidebar Floating Card */
 #sidebar {
   position: absolute;
   top: 16px;
@@ -138,7 +138,7 @@ html, body {
   background: white;
   border: 1px solid #dadce0;
   border-radius: 4px;
-  max-height: 150px;
+  max-height: 180px;
   overflow-y: auto;
   display: none;
 }
@@ -161,22 +161,26 @@ html, body {
 .travel-modes {
   display: flex;
   gap: 4px;
+  flex-wrap: wrap;
 }
 
 .mode-btn {
   flex: 1;
+  min-width: 60px;
   padding: 6px;
   border: 1px solid #dadce0;
   background: #fff;
   border-radius: 16px;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   cursor: pointer;
+  text-align: center;
 }
 
 .mode-btn.active {
   background: #e8f0fe;
   color: #1967d2;
   border-color: #1967d2;
+  font-weight: bold;
 }
 
 button.primary-btn {
@@ -205,7 +209,7 @@ button.secondary-btn {
   padding-top: 8px;
 }
 
-/* Map Layer Control Buttons */
+/* Layer & Location Controls */
 #layer-controls {
   position: absolute;
   bottom: 24px;
